@@ -9,7 +9,7 @@ log.root.level = log.DEBUG
 from xlwt import Workbook, XFStyle, Borders, Pattern, Font
 from tempfile import TemporaryFile
 
-from sqlalchemy import and_, or_, distinct
+from sqlalchemy import and_, or_, distinct, asc
 
 try:
     import erp.model as m
@@ -108,6 +108,8 @@ def get_test_ids():
     # ensure there are responses
     query = query.join('sections','items')
     query = query.filter(and_(tst.CandidateTestItem.response!=None, tst.CandidateTestItem.response!=''))
+
+    query = query.order_by(asc(tst.TestVersion.id))
 
     # query gives us a list or sets
     # use list comprehension to return just a list
