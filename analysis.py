@@ -10,6 +10,7 @@ from xlwt import Workbook, XFStyle, Borders, Pattern, Font
 from tempfile import TemporaryFile
 
 from sqlalchemy import and_, or_, distinct, asc
+from sqlalchemy.orm import eagerload
 
 try:
     import erp.model as m
@@ -88,9 +89,37 @@ def version_responses(ct):
 
     return version_responses
 
-def get_test_ids():
+def get_tests_query(filter_object=None):
 
-    # get the candidate test ids to page through
+    # get the candidate tests to page through
+    query = tst.CandidateTest.query
+
+    # leave out alta tests
+    query = query.join('candidate_profile','account')
+    query = query.filter(tst.Account.id!=352)
+
+    # leave out archived
+    query = query.join('test','test','type')
+    query = query.join('version')
+    query = query.filter(and_(tst.AccountTest.archived==False, tst.Test.archived==False, tst.TestVersion.archived==False))
+
+    # get only reading comprehension
+    query = query.filter(tst.TestType.id==6)
+
+    # ensure there are responses
+    query = query.join('sections','items')
+    query = query.filter(and_(tst.CandidateTestItem.response!=None, tst.CandidateTestItem.response!=''))
+
+    # order by test version
+    query = query.order_by(asc(tst.Test.id),asc(tst.TestVersion.id))
+
+    # eagerload our responses
+    query = query.options(eagerload('sections.items.response'))
+
+    return query.distinct()
+
+def get_test_ids():
+    # get the candidate test ids
     query = m.meta.Session.query(distinct(tst.CandidateTest.id))
 
     # leave out alta tests
@@ -109,6 +138,7 @@ def get_test_ids():
     query = query.join('sections','items')
     query = query.filter(and_(tst.CandidateTestItem.response!=None, tst.CandidateTestItem.response!=''))
 
+    # order by test version
     query = query.order_by(asc(tst.TestVersion.id))
 
     # query gives us a list or sets
@@ -116,26 +146,138 @@ def get_test_ids():
     result_rows = query.all()
     return [row[0] for row in result_rows]
 
-def analyze(workbook_name='analysis.xls', binary=False, include_distratcr=True):
+class AnalysisDoc(object):
 
-    _book = Workbook()
     test_count = 0
     version_count = 0
     ct_count = 0
-    test_ids = []
 
-    # Table of Contents
-    tboc_row = 0
-    tboc = _book.add_sheet('TBOC')
+    def __init__(self):
+        pass
 
-    tboc.write(tboc_row, 0,'Sheet Name', style_bold)
-    tboc.write(tboc_row, 1, 'Test Name', style_bold)
-    tboc.write(tboc_row, 2, 'Status', style_bold)
-    tboc.write(tboc_row, 3, 'Item Count', style_bold)
-    tboc.write(tboc_row, 4, 'Evaluation Count', style_bold)
+    def add_test(self):
+        pass
 
-    rc_type = tst.TestType.get(6)
-    for test in rc_type.tests:
+class page(dict):
+
+    def __init__(self, *args, **kwargs):
+        dict.__init__(self, *args, **kwargs )
+        self['row']=0
+        self['col']=0
+
+    def __getattr__(self, key):
+        if key in self:
+            return self[key]
+        return None
+
+    def __setattr__(self, key, value):
+        """
+        If the attribute exists, update
+        Else create
+        """
+        self[key] = value
+
+    def get(self, key):
+        if key in self:
+            return self[key]
+        else:
+            return None
+
+class AnalysisWB(AnalysisDoc):
+
+    _book = None
+
+    name = ''
+
+    tboc = None
+    pages = {}
+
+    def __init__(self, name='analysis.xls'):
+        """
+        Initialize our Analysis Document
+        """
+
+        self.name = name
+        self._book = Workbook()
+
+        # create table of contents
+        self.create_table_of_contents()
+
+    def get_page(self,name):
+        """
+        Returns the page object containing the
+        sheet reference, last row and column position.
+
+        If the page with provided name doesn't exist
+        it creates it and returns the default values.
+        """
+        cur_page = self.pages.setdefault(name,page())
+        if not cur_page.sheet:
+            cur_page.sheet = self._book.add_sheet(name)
+        return cur_page
+
+    def create_table_of_contents(self):
+        # create the sheet
+        tboc = self.get_page('TBOC')
+
+        # add the headers
+        tboc.sheet.write(tboc.row, 0,'Sheet Name', style_bold)
+        tboc.sheet.write(tboc.row, 1, 'Test Name', style_bold)
+        tboc.sheet.write(tboc.row, 2, 'Status', style_bold)
+        tboc.sheet.write(tboc.row, 3, 'Item Count', style_bold)
+        tboc.sheet.write(tboc.row, 4, 'Evaluation Count', style_bold)
+
+        # increment to ready for entry
+        tboc.row += 2
+
+    def update_tboc(self, test):
+
+        tboc = self.get_page('TBOC')
+        # add the test
+        tboc.sheet.write(tboc.row, 0, test.id)
+        tboc.sheet.write(tboc.row, 1, test.description)
+
+        # increment to ready for entry
+        tboc.row += 1
+
+
+    def add_test(self,candidate_test):
+        self.ct_count += 1
+
+        test_page = self.get_page(str(candidate_test.test.test.id))
+        if test_page.ct_count == 0:
+            # version just added to workbook
+        test_page.ct_count += 1
+
+    def close(self,):
+        # save before closing
+        self._book.save(self.name)
+
+def analyze(workbook_name='analysis.xls', binary=False, include_distratcr=True):
+
+    query = get_tests_query()
+
+    total = query.count()
+    limit = 500
+    offset = 0
+
+    alpha = AnalysisWB('alpha_analysis.xls')
+
+    while offset < total:
+        # get the tests
+        tests = query.limit(limit).offset(offset).all()
+
+        # update our offset
+        offset += limit
+
+        # do something with the tests
+        for test in tests:
+            alpha.add_test(test)
+
+    alpha.close()
+
+    for test in []:
+
         # excel position ref
         col = 0
         row = 0
@@ -260,10 +402,3 @@ def analyze(workbook_name='analysis.xls', binary=False, include_distratcr=True):
                 except:
                     pass
                     #log.warning('Unable to print %s %s %s %s', test.description, test.id, item_id, tiv['items'][item_id])
-
-        tboc.write(tboc_row, 3, t_item_count)
-        tboc.write(tboc_row, 4, t_ct_count)
-        test_count += 1
-    _book.save(workbook_name)
-    log.debug('Analyzed %s tests containing %s versions %s candidate tests', test_count, version_count, ct_count)
-    return test_ids
