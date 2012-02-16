@@ -9,15 +9,14 @@ log.root.level = log.DEBUG
 from xlwt import Workbook, XFStyle, Borders, Pattern, Font
 from tempfile import TemporaryFile
 
+from sqlalchemy import and_, or_, distinct
+
 try:
     import erp.model as m
     import erp.model.testing as tst
 except ImportError:
     import portal.model as m
     import portal.model.testing as tst
-
-rc_type = tst.TestType.get(6)
-
 
 fnt = Font()
 fnt.name = 'Arial'
@@ -89,23 +88,51 @@ def version_responses(ct):
 
     return version_responses
 
+def get_test_ids():
+
+    # get the candidate test ids to page through
+    query = m.meta.Session.query(distinct(tst.CandidateTest.id))
+
+    # leave out alta tests
+    query = query.join('candidate_profile','account')
+    query = query.filter(tst.Account.id!=352)
+
+    # leave out archived
+    query = query.join('test','test','type')
+    query = query.join('version')
+    query = query.filter(and_(tst.AccountTest.archived==False, tst.Test.archived==False, tst.TestVersion.archived==False))
+
+    # get only reading comprehension
+    query = query.filter(tst.TestType.id==6)
+
+    # ensure there are responses
+    query = query.join('sections','items')
+    query = query.filter(and_(tst.CandidateTestItem.response!=None, tst.CandidateTestItem.response!=''))
+
+    # query gives us a list or sets
+    # use list comprehension to return just a list
+    result_rows = query.all()
+    return [row[0] for row in result_rows]
+
 def analyze(workbook_name='analysis.xls', binary=False, include_distratcr=True):
 
     _book = Workbook()
     test_count = 0
     version_count = 0
     ct_count = 0
+    test_ids = []
 
+    # Table of Contents
     tboc_row = 0
     tboc = _book.add_sheet('TBOC')
 
-    # Table of Contents
     tboc.write(tboc_row, 0,'Sheet Name', style_bold)
     tboc.write(tboc_row, 1, 'Test Name', style_bold)
     tboc.write(tboc_row, 2, 'Status', style_bold)
     tboc.write(tboc_row, 3, 'Item Count', style_bold)
     tboc.write(tboc_row, 4, 'Evaluation Count', style_bold)
 
+    rc_type = tst.TestType.get(6)
     for test in rc_type.tests:
         # excel position ref
         col = 0
@@ -169,7 +196,7 @@ def analyze(workbook_name='analysis.xls', binary=False, include_distratcr=True):
             version_count += 1
             for candidate_test in version.candidate_tests:
                 ctr = version_responses(candidate_test)
-                if candidate_test.candidate_profile.account.id == 352 or not ctr:
+                if candidate_test.test.archived or candidate_test.candidate_profile.account.id == 352 or not ctr:
                     # ignore alta stuff or tests with no answers
                     continue
                 sheet.write(row, 0, candidate_test.number)
@@ -185,6 +212,7 @@ def analyze(workbook_name='analysis.xls', binary=False, include_distratcr=True):
 
                 row += 1
                 ct_count +=1
+                test_ids.append(candidate_test.id)
                 t_ct_count +=1
 
             # write out the response per item data
@@ -236,3 +264,4 @@ def analyze(workbook_name='analysis.xls', binary=False, include_distratcr=True):
         test_count += 1
     _book.save(workbook_name)
     log.debug('Analyzed %s tests containing %s versions %s candidate tests', test_count, version_count, ct_count)
+    return test_ids
