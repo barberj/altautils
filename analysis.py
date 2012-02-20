@@ -10,7 +10,7 @@ from xlwt import Workbook, XFStyle, Borders, Pattern, Font
 from tempfile import TemporaryFile
 
 from sqlalchemy import and_, or_, distinct, asc
-from sqlalchemy.orm import eagerload
+from sqlalchemy.orm import eagerload, eagerload_all
 
 try:
     import erp.model as m
@@ -40,17 +40,13 @@ style_bold_border_right = XFStyle()
 style_bold_border_right.font = fnt
 style_bold_border_right.borders = border_right
 
-def write_test_header(sht):
-    row = 2
-    col = 3
-
-    headers = ['Test Number', 'Date']
-    for header in headers:
-        sht.write(row, col, header, style_bold)
-        col += 1
-
 def version_items(version):
-    version_items = {'items':{},'choices':{}}
+    """
+    Return dictionary with item answer,
+    all the choices the version has available, and
+    corresponding counts
+    """
+    version_items = {'choices':{}}
     for section in version.sections:
         if section.archived:
             continue
@@ -58,28 +54,44 @@ def version_items(version):
             if sec_ver.archived:
                 continue
             for item in sec_ver.items:
-                if item.archived or not item.type.has_response:
+                if item.archived or not item.type.has_response or not item.type.has_choices:
                     continue
                 for item_ver in item.versions:
                     if item_ver.archived:
                         continue
-                    version_items['items'][item_ver.id] = {'answer':item_ver.answer, 'total': 0}
-                    version_items['items'][item_ver.id]['choices'] = {}
+                    version_items[item_ver.id] = {'answer':item_ver.answer, 'total': 0}
+                    version_items[item_ver.id]['choices'] = {}
                     for choice in item_ver.choices:
-                        version_items['items'][item_ver.id]['choices'][choice.choice] = 0
+                        version_items[item_ver.id]['choices'][choice.choice] = 0
                         version_items['choices'][choice.choice] = {'row':0}
                     #account for skipping
-                    version_items['items'][item_ver.id]['choices'][u'-'] = 0
+                    version_items[item_ver.id]['choices'][u'-'] = 0
                     version_items['choices']['-'] = {'row':0}
 
     return version_items
+
+def candidate_responses(candidate_test):
+    """
+    Dictionary of responses for the candidate test.
+    Key is the item id, value is the response
+    """
+    responses = {}
+    for section in candidate_test.sections:
+        if section.version and section.version.archived:
+            # archived items won't be tested on any longer
+            # no point in including in analysis
+            continue
+        for item in section.items:
+            if item.item.type.has_response and item.item.type.has_choices:
+                responses[item.version.id] = item.response if item.response else '-'
+    return responses
 
 def version_responses(ct):
     has_answer = False
     version_responses = {}
     for section in ct.sections:
         for item in section.items:
-            if item.item.type.has_response:
+            if item.item.type.has_response and item.item.type.has_choices:
                 if item.response:
                     has_answer = True
                 version_responses.setdefault(item.tst_test_item_version_id,{'response':item.response if item.response else '-'})
@@ -114,7 +126,7 @@ def get_tests_query(filter_object=None):
     query = query.order_by(asc(tst.Test.id),asc(tst.TestVersion.id))
 
     # eagerload our responses
-    query = query.options(eagerload('sections.items.response'))
+    query = query.options(eagerload_all('sections.items'), eagerload('sections.items.item.type.has_response'))
 
     return query.distinct()
 
@@ -166,6 +178,10 @@ class page(dict):
         self['col']=0
 
     def __getattr__(self, key):
+        """
+        Return the attribute value if it exists
+        Else None
+        """
         if key in self:
             return self[key]
         return None
@@ -178,6 +194,10 @@ class page(dict):
         self[key] = value
 
     def get(self, key):
+        """
+        Return the key value if it exists
+        Else None
+        """
         if key in self:
             return self[key]
         else:
@@ -223,30 +243,45 @@ class AnalysisWB(AnalysisDoc):
         # add the headers
         tboc.sheet.write(tboc.row, 0,'Sheet Name', style_bold)
         tboc.sheet.write(tboc.row, 1, 'Test Name', style_bold)
-        tboc.sheet.write(tboc.row, 2, 'Status', style_bold)
-        tboc.sheet.write(tboc.row, 3, 'Item Count', style_bold)
-        tboc.sheet.write(tboc.row, 4, 'Evaluation Count', style_bold)
+        tboc.sheet.write(tboc.row, 2, 'Item Count', style_bold)
+        tboc.sheet.write(tboc.row, 3, 'Evaluation Count', style_bold)
 
         # increment to ready for entry
         tboc.row += 2
 
-    def update_tboc(self, test):
+    def update_tboc(self, test_page):
 
         tboc = self.get_page('TBOC')
         # add the test
-        tboc.sheet.write(tboc.row, 0, test.id)
-        tboc.sheet.write(tboc.row, 1, test.description)
+        tboc.sheet.write(tboc.row, 0, '%sv%s' % (test_page['test'].id, test_page['version'].id))
+        tboc.sheet.write(tboc.row, 1, test_page['test'].description)
+        # don't include the choices in the item count
+        tboc.sheet.write(tboc.row, 2, len(test_page['items'].keys())-l)
+        tboc.sheet.write(tboc.row, 3, test_page['ct_count'])
 
         # increment to ready for entry
         tboc.row += 1
 
-
     def add_test(self,candidate_test):
         self.ct_count += 1
 
-        test_page = self.get_page(str(candidate_test.test.test.id))
-        if test_page.ct_count == 0:
+        # some tests may have multiple verions
+        # currently they want each verison to have its own page
+        # for indiviudal analysis
+        _name= '%sv%s' % (candidate_test.test.test.id, candidate_test.version.id)
+        test_page = self.get_page(_name)
+        if not test_page.ct_count:
             # version just added to workbook
+            test_page.ct_count = 0
+            test_page.test = candidate_test.test.test
+            test_page.version = candidate_test.version
+            test_page.items = version_items(test_page.version)
+
+        # collate candidate test data
+        ct_responses = candidate_responses(candidate_test)
+        for response in ct_responses:
+            test_page['items'][response]['choices'][ct_responses[response]] += 1
+            test_page['items'][response]['total'] += 1
         test_page.ct_count += 1
 
     def close(self,):
@@ -273,6 +308,12 @@ def analyze(workbook_name='analysis.xls', binary=False, include_distratcr=True):
         # do something with the tests
         for test in tests:
             alpha.add_test(test)
+
+    # lets update the tboc
+    # sort by test and then version
+    for page in sorted(alpha.pages, key=lambda test_page: (alpha.pages[test_page]['test'].id,alpha.pages[test_page]['version'].id) if test_page != 'TBOC' else 0):
+        if page != 'TBOC':
+            alpha.update_tboc(alpha.pages[page])
 
     alpha.close()
 
