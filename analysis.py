@@ -86,21 +86,6 @@ def candidate_responses(candidate_test):
                 responses[item.version.id] = item.response if item.response else '-'
     return responses
 
-def version_responses(ct):
-    has_answer = False
-    version_responses = {}
-    for section in ct.sections:
-        for item in section.items:
-            if item.item.type.has_response and item.item.type.has_choices:
-                if item.response:
-                    has_answer = True
-                version_responses.setdefault(item.tst_test_item_version_id,{'response':item.response if item.response else '-'})
-
-    if not has_answer:
-        return
-
-    return version_responses
-
 def get_tests_query(filter_object=None):
 
     # get the candidate tests to page through
@@ -256,7 +241,7 @@ class AnalysisWB(AnalysisDoc):
         tboc.sheet.write(tboc.row, 0, '%sv%s' % (test_page['test'].id, test_page['version'].id))
         tboc.sheet.write(tboc.row, 1, test_page['test'].description)
         # don't include the choices in the item count
-        tboc.sheet.write(tboc.row, 2, len(test_page['items'].keys())-l)
+        tboc.sheet.write(tboc.row, 2, len(test_page['items'].keys())-1)
         tboc.sheet.write(tboc.row, 3, test_page['ct_count'])
 
         # increment to ready for entry
