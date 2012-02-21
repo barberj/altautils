@@ -108,7 +108,7 @@ def get_tests_query(filter_object=None):
     query = query.filter(and_(tst.CandidateTestItem.response!=None, tst.CandidateTestItem.response!=''))
 
     # order by test version
-    query = query.order_by(asc(tst.Test.id),asc(tst.TestVersion.id))
+    query = query.order_by(asc(tst.Test.id),asc(tst.TestVersion.id),asc(tst.CandidateTest.local_date))
 
     # eagerload our responses
     query = query.options(eagerload_all('sections.items'), eagerload('sections.items.item.type.has_response'))
@@ -188,6 +188,10 @@ class page(dict):
         else:
             return None
 
+    def next_row(self):
+        self['row'] += 1
+        self['col'] = 0
+
 class AnalysisWB(AnalysisDoc):
 
     _book = None
@@ -197,13 +201,15 @@ class AnalysisWB(AnalysisDoc):
     tboc = None
     pages = {}
 
-    def __init__(self, name='analysis.xls'):
+    def __init__(self, name='analysis.xls', raw=True, binary=False):
         """
         Initialize our Analysis Document
         """
 
         self.name = name
         self._book = Workbook()
+        self.raw = raw
+        self.binary = binary
 
         # create table of contents
         self.create_table_of_contents()
@@ -247,8 +253,33 @@ class AnalysisWB(AnalysisDoc):
         # increment to ready for entry
         tboc.row += 1
 
+    def add_items(self,page):
+        """
+        Add the column header
+        """
+
+        if not self.raw:
+            # if doing items for details
+            # we need to make space
+            # for the ct number, date
+            page.col = 2
+
+        for item in page['items']:
+            if item != 'choices':
+                page.sheet.write(page.row, page.col, u'item %s' % item, style_bold)
+                # need to keep up with the items position
+                # so that the correlating responses
+                # will be in right column as well
+                page['items'][item]['col'] = page.col
+                page.col += 1
+
+        # increment row, reset column
+        page.next_row()
+
+    def add_available_responses(self, test_page):
+        pass
+
     def add_test(self,candidate_test):
-        self.ct_count += 1
 
         # some tests may have multiple verions
         # currently they want each verison to have its own page
@@ -262,18 +293,57 @@ class AnalysisWB(AnalysisDoc):
             test_page.version = candidate_test.version
             test_page.items = version_items(test_page.version)
 
+            if not self.raw:
+                # add key, name, candidate test and date info
+                test_page.sheet.write(test_page.row, test_page.col, 'Key', style_bold)
+                test_page.sheet.write(test_page.row, test_page.col + 1, '-', style_bold)
+                test_page.col += 2
+
+                # increment row, reset column
+                test_page.next_row()
+
+            # now add the items
+            self.add_items(test_page)
+
+        if not self.raw:
+            # we want details, not just raw responses
+            # add candidate test and date info
+            test_page.sheet.write(test_page.row, test_page.col, candidate_test.number)
+            test_page.sheet.write(test_page.row, test_page.col + 1, candidate_test.local_date.strftime('%m/%d/%Y'))
+            test_page.col += 2
+
         # collate candidate test data
         ct_responses = candidate_responses(candidate_test)
         for response in ct_responses:
+            # keep response tallies so can do stats
             test_page['items'][response]['choices'][ct_responses[response]] += 1
             test_page['items'][response]['total'] += 1
+            # write the response on sheet
+            test_page.sheet.write(test_page.row, test_page['items'][response]['col'],
+                ct_responses[response] if not self.binary else 1
+                if test_page['items'][response]['answer'] == ct_responses[response] else 0)
+
+        # increment row, reset column
+        test_page.next_row()
+        # add one more evaluation to the
+        # version tally
         test_page.ct_count += 1
+        # and total tally
+        self.ct_count += 1
 
     def close(self,):
         # save before closing
         self._book.save(self.name)
 
-def analyze(workbook_name='analysis.xls', binary=False, include_distratcr=True):
+def analyze_all():
+
+    # get the raw
+    analyze(workbook_name='raw_responses.xls')
+
+    # get the alpha detail with distractors
+    analyze(workbook_name='alpha_analysis.xls', raw=False)
+
+def analyze(workbook_name, raw=True, binary=False):
 
     query = get_tests_query()
 
@@ -281,7 +351,7 @@ def analyze(workbook_name='analysis.xls', binary=False, include_distratcr=True):
     limit = 500
     offset = 0
 
-    alpha = AnalysisWB('alpha_analysis.xls')
+    wb = AnalysisWB(workbook_name,raw,binary)
 
     while offset < total:
         # get the tests
@@ -292,15 +362,17 @@ def analyze(workbook_name='analysis.xls', binary=False, include_distratcr=True):
 
         # do something with the tests
         for test in tests:
-            alpha.add_test(test)
+            wb.add_test(test)
 
     # lets update the tboc
     # sort by test and then version
-    for page in sorted(alpha.pages, key=lambda test_page: (alpha.pages[test_page]['test'].id,alpha.pages[test_page]['version'].id) if test_page != 'TBOC' else 0):
+    for page in sorted(wb.pages, key=lambda test_page: (wb.pages[test_page]['test'].id,wb.pages[test_page]['version'].id) if test_page != 'TBOC' else 0):
         if page != 'TBOC':
-            alpha.update_tboc(alpha.pages[page])
+            wb.update_tboc(wb.pages[page])
 
-    alpha.close()
+    wb.close()
+
+    return wb
 
     for test in []:
 
