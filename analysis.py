@@ -277,7 +277,23 @@ class AnalysisWB(AnalysisDoc):
         page.next_row()
 
     def add_available_responses(self, test_page):
-        pass
+
+        for choice in sorted(test_page['items']['choices']):
+            # ignore the designation for no answer
+            if not choice == '-':
+                test_page.sheet.write(test_page.row, 1, choice)
+
+                # in next col print all the item ids
+                # with this choice as the correct answer
+                items = [item for item in test_page['items'] if item != 'choices' and
+                            test_page['items'][item]['answer'] == choice]
+                item_str = ''
+                for item in items:
+                    item_str += '%s,' % item
+                # remove trailing comma
+                item_str = item_str[:-1]
+                test_page.sheet.write(test_page.row, 2, item_str)
+                test_page.next_row()
 
     def add_test(self,candidate_test):
 
@@ -294,6 +310,9 @@ class AnalysisWB(AnalysisDoc):
             test_page.items = version_items(test_page.version)
 
             if not self.raw:
+                # add the available responses
+                self.add_available_responses(test_page)
+
                 # add key, name, candidate test and date info
                 test_page.sheet.write(test_page.row, test_page.col, 'Key', style_bold)
                 test_page.sheet.write(test_page.row, test_page.col + 1, '-', style_bold)
