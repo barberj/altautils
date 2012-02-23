@@ -276,6 +276,10 @@ class AnalysisWB(AnalysisDoc):
         # increment row, reset column
         page.next_row()
 
+    def add_description(self, test_page):
+        test_page.sheet.write(test_page.row, 0, test_page['test'].description)
+        test_page.next_row()
+
     def add_available_responses(self, test_page):
 
         for choice in sorted(test_page['items']['choices']):
@@ -312,6 +316,9 @@ class AnalysisWB(AnalysisDoc):
             if not self.raw:
                 # add the available responses
                 self.add_available_responses(test_page)
+
+                # add the description
+                self.add_description(test_page)
 
                 # add key, name, candidate test and date info
                 test_page.sheet.write(test_page.row, test_page.col, 'Key', style_bold)
