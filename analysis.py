@@ -397,13 +397,13 @@ class AnalysisWB(AnalysisDoc):
         # save before closing
         self._book.save(self.name)
 
-def analyze_all():
-
-    # get the raw
-    analyze(workbook_name='raw_responses.xls')
-
+def analyze_detail():
     # get the alpha detail with distractors
-    analyze(workbook_name='alpha_analysis.xls', raw=False)
+    return analyze(workbook_name='alpha_analysis.xls', raw=False)
+
+def analyze_raw():
+    # get the raw
+    return analyze(workbook_name='raw_responses.xls')
 
 def analyze(workbook_name, raw=True, binary=False):
 
