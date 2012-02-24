@@ -282,7 +282,7 @@ class AnalysisWB(AnalysisDoc):
 
         for choice in sorted(test_page['items']['choices']):
             # ignore the designation for no answer
-            test_page.sheet.write(test_page.row, 1, choice)
+            test_page.sheet.write(test_page.row, 1, choice, style_bold_border_right)
 
             # in next col print all the item ids
             # with this choice as the correct answer
