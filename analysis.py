@@ -253,7 +253,7 @@ class AnalysisWB(AnalysisDoc):
         # increment to ready for entry
         tboc.row += 1
 
-    def add_items(self,page):
+    def add_items(self,test_page):
         """
         Add the column header
         """
@@ -262,19 +262,38 @@ class AnalysisWB(AnalysisDoc):
             # if doing items for details
             # we need to make space
             # for the ct number, date
-            page.col = 2
+            test_page.col = 2
 
-        for item in page['items']:
+        for item in test_page['items']:
             if item != 'choices':
-                page.sheet.write(page.row, page.col, u'item %s' % item, style_bold)
+                test_page.sheet.write(test_page.row, test_page.col, u'item %s' % item, style_bold)
                 # need to keep up with the items position
                 # so that the correlating responses
                 # will be in right column as well
-                page['items'][item]['col'] = page.col
-                page.col += 1
+                test_page['items'][item]['col'] = test_page.col
+                test_page.col += 1
 
         # increment row, reset column
-        page.next_row()
+        test_page.next_row()
+
+    def add_distractor(self, test_page, use_percentage = False):
+
+        test_page.next_row()
+
+        for choice in sorted(test_page['items']['choices']):
+            # ignore the designation for no answer
+            test_page.sheet.write(test_page.row, 1, choice)
+
+            # in next col print all the item ids
+            # with this choice as the correct answer
+            for item in test_page['items']:
+                 if item != 'choices':
+                    for t_choice in test_page['items'][item]['choices']:
+                        if t_choice == choice:
+                            test_page.sheet.write(test_page.row,
+                                test_page['items'][item]['col'],
+                                test_page['items'][item]['choices'][choice] if not use_percentage else '%0.2f %%' % (test_page['items'][item]['choices'][choice] * 100 /  test_page['items'][item]['total']))
+            test_page.next_row()
 
     def add_description(self, test_page):
         test_page.sheet.write(test_page.row, 0, test_page['test'].description)
@@ -323,13 +342,25 @@ class AnalysisWB(AnalysisDoc):
                 # add key, name, candidate test and date info
                 test_page.sheet.write(test_page.row, test_page.col, 'Key', style_bold)
                 test_page.sheet.write(test_page.row, test_page.col + 1, '-', style_bold)
-                test_page.col += 2
 
                 # increment row, reset column
                 test_page.next_row()
 
             # now add the items
             self.add_items(test_page)
+
+            if not self.raw:
+                # add the correct answer above the item
+                for item in test_page['items']:
+                    if item != 'choices':
+                        test_page.sheet.write(test_page.row-2,
+                            test_page['items'][item]['col'],
+                            test_page['items'][item]['answer'])
+
+                # freeze frame
+                test_page.sheet.set_panes_frozen(True)
+                test_page.sheet.set_horz_split_pos(test_page.row)
+                test_page.sheet.set_remove_splits(True)
 
         if not self.raw:
             # we want details, not just raw responses
@@ -339,15 +370,20 @@ class AnalysisWB(AnalysisDoc):
             test_page.col += 2
 
         # collate candidate test data
-        ct_responses = candidate_responses(candidate_test)
-        for response in ct_responses:
+        ct_items = candidate_responses(candidate_test)
+        for item_number in ct_items:
             # keep response tallies so can do stats
-            test_page['items'][response]['choices'][ct_responses[response]] += 1
-            test_page['items'][response]['total'] += 1
+            test_page['items'][item_number]['choices'][ct_items[item_number]] += 1
+            test_page['items'][item_number]['total'] += 1
             # write the response on sheet
-            test_page.sheet.write(test_page.row, test_page['items'][response]['col'],
-                ct_responses[response] if not self.binary else 1
-                if test_page['items'][response]['answer'] == ct_responses[response] else 0)
+            try:
+                test_page.sheet.write(test_page.row, test_page['items'][item_number]['col'],
+                    ct_items[item_number] if not self.binary else 1
+                    if test_page['items'][item_number]['answer'] == ct_items[item_number] else 0)
+            except:
+                print test_page['items'][item_number]['col']
+                print test_page.row, test_page.col
+                raise
 
         # increment row, reset column
         test_page.next_row()
@@ -391,138 +427,18 @@ def analyze(workbook_name, raw=True, binary=False):
             wb.add_test(test)
 
     # lets update the tboc
+    # and add distractor data if applicable
     # sort by test and then version
-    for page in sorted(wb.pages, key=lambda test_page: (wb.pages[test_page]['test'].id,wb.pages[test_page]['version'].id) if test_page != 'TBOC' else 0):
-        if page != 'TBOC':
-            wb.update_tboc(wb.pages[page])
+    for page_name in sorted(wb.pages, key=lambda test_page: (wb.pages[test_page]['test'].id,wb.pages[test_page]['version'].id) if test_page != 'TBOC' else 0):
+        if page_name != 'TBOC':
+            test_page = wb.pages[page_name]
+            wb.update_tboc(test_page)
+            if not wb.raw:
+                # add the distractors
+                wb.add_distractor(test_page)
+                # now as percentages
+                wb.add_distractor(test_page, use_percentage=True)
 
     wb.close()
 
     return wb
-
-    for test in []:
-
-        # excel position ref
-        col = 0
-        row = 0
-
-        t_ct_count = 0
-        t_item_count = 0
-
-        tboc_row += 1
-        tboc.write(tboc_row, 0, test.id)
-        tboc.write(tboc_row, 1, test.description)
-
-        if test.archived or not test.versions or not [ct for v in test.versions for ct in v.candidate_tests]:
-            # ignore archived tests or
-            # tests with out any versions
-            # or versions without candidate tests
-            tboc.write(tboc_row, 2, 'Not Included')
-            continue
-
-        # start our sheet
-        sheet = _book.add_sheet(str(test.id))
-        sheet.write(row,col, test.description, style_bold)
-
-        row = 1
-        for version in test.versions:
-            vcol = 1
-            col = vcol
-            if version.archived or not version.candidate_tests:
-                # ignore archived
-                continue
-
-            row += 1
-
-            # write out the version description
-            sheet.write(row,0, version.description if version.description else 'Version ID %s' %  version.id, style_bold)
-
-            # write out the item ids
-            row += 1
-            sheet.write(row,0, 'Test Number', style_bold)
-            sheet.write(row,1, 'Date', style_bold)
-            col += 1
-            tiv = version_items(version)
-            for item_id in tiv['items']:
-                sheet.write(row,col, item_id, style_bold)
-                tiv['items'][item_id]['column']=col
-                col += 1
-
-            # write out the key
-            row += 1
-            sheet.write(row,0, 'Key', style_bold)
-            sheet.write(row,1, '-', style_bold)
-            for item_id in tiv['items']:
-                try:
-                    sheet.write(row, tiv['items'][item_id]['column'], tiv['items'][item_id]['answer'], style_bold)
-                except:
-                    print tiv['items'][item_id]
-                    raise
-
-            # write out test data
-            row += 1
-            version_count += 1
-            for candidate_test in version.candidate_tests:
-                ctr = version_responses(candidate_test)
-                if candidate_test.test.archived or candidate_test.candidate_profile.account.id == 352 or not ctr:
-                    # ignore alta stuff or tests with no answers
-                    continue
-                sheet.write(row, 0, candidate_test.number)
-                sheet.write(row, 1, candidate_test.local_date.strftime('%m/%d/%Y'))
-                for item_id in ctr:
-                    try:
-                        sheet.write(row, tiv['items'][item_id]['column'], ctr[item_id]['response'] if not binary else 1 if tiv['items'][item_id]['answer'].lower() == ctr[item_id]['response'].lower() else 0)
-                        tiv['items'][item_id]['total'] += 1
-                        tiv['items'][item_id]['choices'][ctr[item_id]['response']] += 1
-                    except:
-                        pass
-                        #log.warning('Issue with Item Version ID %s for Test %s', item_id, candidate_test.number)
-
-                row += 1
-                ct_count +=1
-                test_ids.append(candidate_test.id)
-                t_ct_count +=1
-
-            # write out the response per item data
-            row += 1
-            for item_id in tiv['items']:
-                sheet.write(row, tiv['items'][item_id]['column'], item_id, style_bold_border_bottom)
-                t_item_count += 1
-
-            # write out responses avail
-            row += 1
-            for choice in sorted(tiv['choices']):
-                sheet.write(row, 1, choice, style_bold_border_right)
-                tiv['choices'][choice]['row']=row
-                row += 1
-            for item_id in tiv['items']:
-                try:
-                    for choice in tiv['items'][item_id]['choices']:
-                        if choice == tiv['items'][item_id]['answer']:
-                            sheet.write(tiv['choices'][choice]['row'],tiv['items'][item_id]['column'],tiv['items'][item_id]['choices'][choice],style_bold)
-                        else:
-                            sheet.write(tiv['choices'][choice]['row'],tiv['items'][item_id]['column'],tiv['items'][item_id]['choices'][choice])
-                except:
-                    pass
-                    #log.warning('Unable to print %s %s %s %s', test.description, test.id, item_id, tiv['items'][item_id])
-
-            # now write out responses avail %
-            row += 1
-            for item_id in tiv['items']:
-                sheet.write(row, tiv['items'][item_id]['column'], item_id, style_bold_border_bottom)
-            row += 1
-            for choice in sorted(tiv['choices']):
-                sheet.write(row, 1, choice, style_bold_border_right)
-                tiv['choices'][choice]['row']=row
-                row += 1
-            for item_id in tiv['items']:
-                try:
-                    for choice in tiv['items'][item_id]['choices']:
-                        percent = '%0.2f %%' %  (tiv['items'][item_id]['choices'][choice] * 100/tiv['items'][item_id]['total'])
-                        if choice == tiv['items'][item_id]['answer']:
-                            sheet.write(tiv['choices'][choice]['row'],tiv['items'][item_id]['column'],percent,style_bold)
-                        else:
-                            sheet.write(tiv['choices'][choice]['row'],tiv['items'][item_id]['column'],percent)
-                except:
-                    pass
-                    #log.warning('Unable to print %s %s %s %s', test.description, test.id, item_id, tiv['items'][item_id])
