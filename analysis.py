@@ -59,7 +59,7 @@ def version_items(version):
                 for item_ver in item.versions:
                     if item_ver.archived:
                         continue
-                    version_items[item_ver.id] = {'answer':item_ver.answer, 'total': 0}
+                    version_items[item_ver.id] = {'answer':item_ver.answer, 'total': 0, 'section': sec_ver.id}
                     version_items[item_ver.id]['choices'] = {}
                     for choice in item_ver.choices:
                         version_items[item_ver.id]['choices'][choice.choice] = 0
@@ -266,6 +266,7 @@ class AnalysisWB(AnalysisDoc):
 
         for item in test_page['items']:
             if item != 'choices':
+                test_page.sheet.write(test_page.row-2, test_page.col, u'section %s' % test_page['items'][item]['section'], style_bold)
                 test_page.sheet.write(test_page.row, test_page.col, u'item %s' % item, style_bold)
                 # need to keep up with the items position
                 # so that the correlating responses
