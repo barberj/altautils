@@ -5,38 +5,29 @@ tokenizer for the item analysis file
 
 import os
 import ply.lex as lex
+import ply.yacc as yacc
 
 # list of tokens
 tokens = (
     'ITEM',
-    'WORD',
-    'NUMBER',
-    'FLOAT',
-    'LPAREN',
-    'RPAREN',
-    'newline',
 )
 
-# regular expression rules for simple tokens
-t_LPAREN  = r'\('
-t_RPAREN  = r'\)'
-t_ITEM = 'item\d+'
-t_WORD = '[A-Za-z]+'
+# regular expression atoms
+item_header = r'item\d+\s+Item'
+choice = '(\s+[a-zA-Z]\(-*(1|0)\.0\))'
+ratio = r'\s+(-*\d+.\d+|NaN)'
 
-def t_FLOAT(t):
-    r'\d+\.\d+'
-    t.value = float(t.value)
-    return t
+# build the full regex
+item_block = item_header + '(' + ratio + '){4}' + '(\n' + choice + '(' + ratio + '){4})+'
 
-def t_NUMBER(t):
-    r'\d+'
-    t.value = int(t.value)
+@lex.TOKEN(item_block)
+def t_ITEM(t):
+    print t.value
     return t
 
 def t_newline(t):
     r'\n+'
     t.lexer.lineno += len(t.value)
-    return t
 
 # Error handling rule
 def t_error(t):
