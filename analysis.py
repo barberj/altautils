@@ -1,7 +1,7 @@
 from __future__ import division
 # analysis.py
 """
-Functions to make Item analysis spreadsheet & summary document(s)
+Functions to make Item analysis spreadsheets
 """
 import logging as log
 log.root.level = log.DEBUG
