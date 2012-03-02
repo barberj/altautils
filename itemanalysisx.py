@@ -11,6 +11,10 @@ import os
 import ply.lex as lex
 import ply.yacc as yacc
 
+try:
+    import erp.model.testing as tst
+except ImportError:
+    import portal.model.testing as tst
 
 class itemAnalysisLexer(object):
     # state variables
@@ -20,18 +24,43 @@ class itemAnalysisLexer(object):
     # list of tokens
     tokens = (
         'ITEM',
+        'TEST',
+        'ITEMCOUNT',
+        'EXAMINEECOUNT',
+        'MINSCORE',
+        'MAXSCORE',
+        'MEANSCORE',
+        'MEDIANSCORE',
+        'DEVIATION',
+        'CRONBACH'
     )
 
     # regular expression atoms
+    float_re = r'(-{0,1}\d+(.\d+){0,1})'
     item_header = r'item\d+\s+Item'
     choice = '(\s+[a-zA-Z]\(-*(1|0)\.0\))'
-    ratio = r'\s+(-*\d+.\d+|NaN)'
+    ratio = r'\s+(' + float_re + '|NaN)'
+
+    t_ITEMCOUNT = 'Number\sof\sItems\s=\s+\d+'
+    t_EXAMINEECOUNT = 'Number\sof\sExaminees\s=\s+\d+'
+    t_MINSCORE= 'Min\s=\s+' + float_re
+    t_MAXSCORE = 'Max\s=\s+' + float_re
+    t_MEANSCORE = 'Mean\s=\s+' + float_re
+    t_MEDIANSCORE = 'Median\s=\s+' + float_re
+    t_DEVIATION = 'Standard\sDeviation\s=\s+' + float_re
+    t_CRONBACH = 'Cronbach\'s\sAlpha\s+' + float_re + '\s+\(' +\
+                      float_re + ',\s+' + float_re + '\)\s+' + float_re
 
     # build the full regex
     item_block = item_header + '(' + ratio + '){4}' + '(\n' + choice + '(' + ratio + '){4})+'
 
     # globals for the report
+    test_name = ''
     item_level_stats = {}
+
+    # lets keep track of what token
+    # types we have seen
+    token_types = set()
 
     def __init__(self,file_path=None):
         if file_path:
@@ -39,7 +68,13 @@ class itemAnalysisLexer(object):
 
     @lex.TOKEN(item_block)
     def t_ITEM(self,t):
-        print t.value
+        return t
+
+    def t_TEST(self,t):
+        r'\d+V\d+'
+        test = tst.Test.get(t.value.split('V')[0])
+        t.value = test.description
+        self.test_name= test.description
         return t
 
     def t_newline(self,t):
@@ -132,6 +167,7 @@ class itemAnalysisLexer(object):
             tok = self.lexer.token()
             if not tok: break
             self.tokens.append(tok)
+            self.token_types.add(tok.type)
 
             # if token is an item block
             # lets break apart the item block
