@@ -44,7 +44,7 @@ class itemAnalysisLexer(object):
     # build the full regexes
     t_ITEMCOUNT = 'Number\sof\sItems\s=\s+\d+'
     t_EXAMINEECOUNT = 'Number\sof\sExaminees\s=\s+\d+'
-    t_MINSCORE= 'Min\s=\s+' + float_re
+    _minscore= 'Min\s=\s+' + float_re
     t_MAXSCORE = 'Max\s=\s+' + float_re
     t_MEANSCORE = 'Mean\s=\s+' + float_re
     t_MEDIANSCORE = 'Median\s=\s+' + float_re
@@ -66,11 +66,16 @@ class itemAnalysisLexer(object):
         if file_path:
             self.input_file(file_path)
 
+    @lex.TOKEN(_minscore)
+    def t_MINSCORE(self,t):
+        t.value = t.value.split('=')[1].strip()
+        return t
+
     def t_TEST(self,t):
         r'\d+V\d+'
         test = tst.Test.get(t.value.split('V')[0])
         t.value = test.description
-        self.test_name= test.description
+        self.test_name = test.description
         return t
 
     def t_newline(self,t):
