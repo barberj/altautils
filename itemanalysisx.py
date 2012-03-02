@@ -8,8 +8,10 @@ import logging as log
 log.root.level = log.DEBUG
 
 import os
+from datetime import datetime
+from itertools import count
 import ply.lex as lex
-import ply.yacc as yacc
+from xlwt import Workbook, XFStyle, Borders, Pattern, Font
 
 try:
     import erp.model.testing as tst
@@ -96,6 +98,8 @@ class itemAnalysisLexer(object):
 
         if not file_path:
             raise Exception('File path must be provided to run throught the lexer')
+        if not isinstance(file_path, str):
+            raise Exception('File path must be a string')
         log.debug('Building lexer')
 
         # verify file exists
@@ -191,3 +195,68 @@ class itemAnalysisLexer(object):
         if not self.__TOKENIZED__:
             log.info('There are no tokens for building the report')
             return
+
+        book = Workbook()
+        sheet = book.add_sheet('ItemAnalysis')
+        row = count()
+        sheet.write(row.next(),0,'ALTA Item Analysis Report')
+        sheet.write(row.next(),0,self.test_name)
+        sheet.write(row.next(),0,'Report Date %s' % datetime.now().strftime('%B %d, %Y'))
+        # Testing dates ...
+
+        sheet.write(row.next(),0, 'Item Level Statistics')
+
+        cur = row.next()
+        sheet.write(cur,0, 'Item')
+        sheet.write(cur,1, 'Difficulty')
+        sheet.write(cur,2, 'Item-Total Correlation')
+
+        for level in sorted(self.item_level_stats.keys()):
+            cur = row.next()
+            sheet.write(cur,0, level)
+            sheet.write(cur,1, self.item_level_stats[level]['difficulty'])
+            sheet.write(cur,2, self.item_level_stats[level]['pearson'])
+            self.item_level_stats[level]
+
+        sheet.write(row.next(),0, 'Test Level  Statistics')
+
+        cur = row.next()
+        sheet.write(cur,0, 'Number of Items')
+        sheet.write(cur,1,2)
+
+        book.save('%s IAE.xls' % self.test_name)
+
+    @classmethod
+    def analyze(cls,file_path=None):
+
+        if not file_path:
+            raise Exception('File path must be provided to analyze with lexer')
+
+        item_analyzer = cls(file_path)
+        item_analyzer.get_tokens()
+        item_analyzer.build_report()
+
+        return item_analyzer
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

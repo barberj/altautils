@@ -7,7 +7,6 @@ import logging as log
 log.root.level = log.DEBUG
 
 from xlwt import Workbook, XFStyle, Borders, Pattern, Font
-from tempfile import TemporaryFile
 
 from sqlalchemy import and_, or_, distinct, asc
 from sqlalchemy.orm import eagerload, eagerload_all
