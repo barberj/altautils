@@ -36,11 +36,12 @@ class itemAnalysisLexer(object):
     )
 
     # regular expression atoms
-    float_re = r'(-{0,1}\d+(.\d+){0,1})'
+    float_re = r'(-{0,1}\d+(.\d+){0,1})' # could be an int as well since i have the decimal in parens and allow for 0 count
     item_header = r'item\d+\s+Item'
     choice = '(\s+[a-zA-Z]\(-*(1|0)\.0\))'
     ratio = r'\s+(' + float_re + '|NaN)'
 
+    # build the full regexes
     t_ITEMCOUNT = 'Number\sof\sItems\s=\s+\d+'
     t_EXAMINEECOUNT = 'Number\sof\sExaminees\s=\s+\d+'
     t_MINSCORE= 'Min\s=\s+' + float_re
@@ -50,9 +51,8 @@ class itemAnalysisLexer(object):
     t_DEVIATION = 'Standard\sDeviation\s=\s+' + float_re
     t_CRONBACH = 'Cronbach\'s\sAlpha\s+' + float_re + '\s+\(' +\
                       float_re + ',\s+' + float_re + '\)\s+' + float_re
-
-    # build the full regex
-    item_block = item_header + '(' + ratio + '){4}' + '(\n' + choice + '(' + ratio + '){4})+'
+    t_ITEM = item_header + '(' + ratio + '){4}' + '(\n' + choice +\
+                      '(' + ratio + '){4})+'
 
     # globals for the report
     test_name = ''
@@ -65,10 +65,6 @@ class itemAnalysisLexer(object):
     def __init__(self,file_path=None):
         if file_path:
             self.input_file(file_path)
-
-    @lex.TOKEN(item_block)
-    def t_ITEM(self,t):
-        return t
 
     def t_TEST(self,t):
         r'\d+V\d+'
