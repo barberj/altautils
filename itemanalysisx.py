@@ -44,14 +44,14 @@ class itemAnalysisLexer(object):
     # build the full regexes
     t_ITEMCOUNT = 'Number\sof\sItems\s=\s+\d+'
     t_EXAMINEECOUNT = 'Number\sof\sExaminees\s=\s+\d+'
-    _minscore= 'Min\s=\s+' + float_re
+    t_MINSCORE= 'Min\s=\s+' + float_re
     t_MAXSCORE = 'Max\s=\s+' + float_re
     t_MEANSCORE = 'Mean\s=\s+' + float_re
     t_MEDIANSCORE = 'Median\s=\s+' + float_re
     t_DEVIATION = 'Standard\sDeviation\s=\s+' + float_re
     t_CRONBACH = 'Cronbach\'s\sAlpha\s+' + float_re + '\s+\(' +\
                       float_re + ',\s+' + float_re + '\)\s+' + float_re
-    t_ITEM = item_header + '(' + ratio + '){4}' + '(\n' + choice +\
+    _item = item_header + '(' + ratio + '){4}' + '(\n' + choice +\
                       '(' + ratio + '){4})+'
 
     # globals for the report
@@ -66,16 +66,16 @@ class itemAnalysisLexer(object):
         if file_path:
             self.input_file(file_path)
 
-    @lex.TOKEN(_minscore)
-    def t_MINSCORE(self,t):
-        t.value = t.value.split('=')[1].strip()
-        return t
-
     def t_TEST(self,t):
         r'\d+V\d+'
         test = tst.Test.get(t.value.split('V')[0])
         t.value = test.description
         self.test_name = test.description
+        return t
+
+    @lex.TOKEN(_item)
+    def t_ITEM(self,t):
+        t.value = self.extract_item_token_data(t.value)
         return t
 
     def t_newline(self,t):
@@ -160,6 +160,8 @@ class itemAnalysisLexer(object):
                             'pearson':choice_parts[3],
                             'answer':choice_parts[0][2]}
 
+        return self.item_level_stats[item]
+
     def get_tokens(self):
         """
         """
@@ -167,13 +169,17 @@ class itemAnalysisLexer(object):
         while True:
             tok = self.lexer.token()
             if not tok: break
-            self.tokens.append(tok)
-            self.token_types.add(tok.type)
 
-            # if token is an item block
-            # lets break apart the item block
-            if tok.type == 'ITEM':
-                self.extract_item_token_data(tok.value)
+            # score and counts we only care about the number
+            # the type infers the rest
+            if 'SCORE' in tok.type or 'COUNT' in tok.type or \
+                'DEVIATION' in tok.type:
+                tok.value = tok.value.split('=')[1].strip()
+
+            self.tokens.append(tok)
+            # keeping up with types seen
+            # mainly for debug
+            self.token_types.add(tok.type)
 
         # update our state
         self.__TOKENIZED__ = True
