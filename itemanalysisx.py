@@ -18,6 +18,23 @@ try:
 except ImportError:
     import portal.model.testing as tst
 
+class CounterWrapper(object):
+    def __init__(self, wrapped_class, *args, **kwargs):
+        self.wrapped_class = wrapped_class(*args, **kwargs)
+
+    def __getattr__(self, attr):
+        orig_attr = self.wrapped_class.__getattribute__(attr)
+        return orig_attr
+
+    @property
+    def current(self):
+        import re
+        next_val = int(re.search('\d+',repr(self.wrapped_class)).group())
+        return next_val - 1 if next_val > 0 else None
+
+    def __repr__(self):
+        return str(self.current)
+
 class itemAnalysisLexer(object):
     # state variables
     __BUILT__ = False
@@ -198,7 +215,7 @@ class itemAnalysisLexer(object):
 
         book = Workbook()
         sheet = book.add_sheet('ItemAnalysis')
-        row = count()
+        row = CounterWrapper(count)
         sheet.write(row.next(),0,'ALTA Item Analysis Report')
         sheet.write(row.next(),0,self.test_name)
         sheet.write(row.next(),0,'Report Date %s' % datetime.now().strftime('%B %d, %Y'))
@@ -206,23 +223,20 @@ class itemAnalysisLexer(object):
 
         sheet.write(row.next(),0, 'Item Level Statistics')
 
-        cur = row.next()
-        sheet.write(cur,0, 'Item')
-        sheet.write(cur,1, 'Difficulty')
-        sheet.write(cur,2, 'Item-Total Correlation')
+        sheet.write(row.next(),0, 'Item')
+        sheet.write(row.current,1, 'Difficulty')
+        sheet.write(row.current,2, 'Item-Total Correlation')
 
         for level in sorted(self.item_level_stats.keys()):
-            cur = row.next()
-            sheet.write(cur,0, level)
-            sheet.write(cur,1, self.item_level_stats[level]['difficulty'])
-            sheet.write(cur,2, self.item_level_stats[level]['pearson'])
+            sheet.write(row.next(),0, level)
+            sheet.write(row.current,1, self.item_level_stats[level]['difficulty'])
+            sheet.write(row.current,2, self.item_level_stats[level]['pearson'])
             self.item_level_stats[level]
 
         sheet.write(row.next(),0, 'Test Level  Statistics')
 
-        cur = row.next()
-        sheet.write(cur,0, 'Number of Items')
-        sheet.write(cur,1,2)
+        sheet.write(row.next(),0, 'Number of Items')
+        sheet.write(row.current,1,2)
 
         book.save('%s IAE.xls' % self.test_name)
 
@@ -237,26 +251,3 @@ class itemAnalysisLexer(object):
         item_analyzer.build_report()
 
         return item_analyzer
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
