@@ -30,7 +30,7 @@ class CounterWrapper(object):
     def current(self):
         import re
         next_val = int(re.search('\d+',repr(self.wrapped_class)).group())
-        return next_val - 1 if next_val > 0 else None
+        return next_val - 1
 
     def __repr__(self):
         return str(self.current)
