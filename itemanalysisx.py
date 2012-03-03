@@ -29,7 +29,7 @@ class CounterWrapper(object):
     @property
     def current(self):
         import re
-        next_val = int(re.search('\d+',repr(self.wrapped_class)).group())
+        next_val = int(re.search('-{0,1}\d+',repr(self.wrapped_class)).group())
         return next_val - 1
 
     def __repr__(self):
