@@ -2,7 +2,7 @@
 import logging as log
 log.root.level = log.DEBUG
 
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 
 try:
     import erp.model as m
@@ -16,7 +16,8 @@ except ImportError:
 
 def change_test_html():
     item_texts = tst.TestItemVersion.query.join(['item','version','section','version','test','type']).\
-        filter(and_(tst.TestItemVersion.item_text.like('%<br>%'), tst.TestType.short_name=='S')).all()
+        filter(and_(tst.TestItemVersion.item_text.like('%<br>%'),
+               or_(tst.TestType.short_name=='S', tst.TestType.short_name=='I'))).all()
     for item in item_texts:
         log.debug('Updating %s Item %s', item.item.version.section.version.test.remarks, item.id)
         item.item_text = item.item_text.replace(u'<br><br>',u'\u000a\u000d').\
