@@ -92,7 +92,8 @@ def get_tests_query(filter_object=None):
 
     # leave out alta tests
     query = query.join('candidate_profile','account')
-    query = query.filter(tst.Account.id!=352)
+    #query = query.filter(tst.Account.id!=352)
+    query = query.filter(tst.Account.id==957)
 
     # leave out archived
     query = query.join('test','test','type')
@@ -265,7 +266,8 @@ class AnalysisWB(AnalysisDoc):
 
         for item in test_page['items']:
             if item != 'choices':
-                test_page.sheet.write(test_page.row-2, test_page.col, u'section %s' % test_page['items'][item]['section'], style_bold)
+                if not self.raw:
+                    test_page.sheet.write(test_page.row-2, test_page.col, u'section %s' % test_page['items'][item]['section'], style_bold)
                 test_page.sheet.write(test_page.row, test_page.col, u'item %s' % item, style_bold)
                 # need to keep up with the items position
                 # so that the correlating responses

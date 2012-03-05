@@ -11,7 +11,15 @@ import os
 from datetime import datetime
 from itertools import count
 import ply.lex as lex
-from xlwt import Workbook, XFStyle, Borders, Pattern, Font
+from xlwt import Workbook, easyxf
+
+
+header_style= easyxf('font: height 250, name Arial Black, bold on;')
+data_header_style= easyxf('font: height 200, name New Times Roman, bold on; borders: top thin, bottom thin, left thin, right thin;')
+data_style= easyxf('font: height 200, name New Times Roman; borders: top thin, bottom thin, left thin, right thin;')
+data_grey_style= easyxf('font: height 200, name New Times Roman; borders: top thin, bottom thin, left thin, right thin; pattern: pattern solid,  fore-colour gray25;')
+
+d_style = [data_style, data_grey_style]
 
 try:
     import erp.model.testing as tst
@@ -36,6 +44,7 @@ class CounterWrapper(object):
         return str(self.current)
 
 class itemAnalysisLexer(object):
+
     # state variables
     __BUILT__ = False
     __TOKENIZED__ = False
@@ -80,6 +89,15 @@ class itemAnalysisLexer(object):
     # lets keep track of what token
     # types we have seen
     token_types = set()
+
+    itemcount = 0
+    examineecount = 0
+    maxscore=0
+    meanscore=0
+    minscore=0
+    medianscore=0
+    deviation=0
+    cronbach = []
 
     def __init__(self,file_path=None):
         if file_path:
@@ -196,6 +214,13 @@ class itemAnalysisLexer(object):
             if 'SCORE' in tok.type or 'COUNT' in tok.type or \
                 'DEVIATION' in tok.type:
                 tok.value = tok.value.split('=')[1].strip()
+                # set attribute so we can reference in report
+                attr = setattr(self,tok.type.lower(), tok.value)
+
+            if tok.type == 'CRONBACH':
+                cron_part = tok.value.split()
+                tok.value = {'estimate': cron_part[2], 'sem': cron_part[5]}
+                self.cronbach.append(tok.value)
 
             self.tokens.append(tok)
             # keeping up with types seen
@@ -216,28 +241,57 @@ class itemAnalysisLexer(object):
         book = Workbook()
         sheet = book.add_sheet('ItemAnalysis')
         row = CounterWrapper(count)
-        sheet.write(row.next(),0,'ALTA Item Analysis Report')
-        sheet.write(row.next(),0,self.test_name)
-        sheet.write(row.next(),0,'Report Date %s' % datetime.now().strftime('%B %d, %Y'))
+        sheet.write(row.next(),0,'ALTA Item Analysis Report', header_style)
+        sheet.write(row.next(),0,self.test_name, header_style)
+        sheet.write(row.next(),0,'Report Date %s' % datetime.now().strftime('%B %d, %Y'), header_style)
         # Testing dates ...
 
-        sheet.write(row.next(),0, 'Item Level Statistics')
+        sheet.write(row.next(),0, 'Item Level Statistics', data_header_style)
 
-        sheet.write(row.next(),0, 'Item')
-        sheet.write(row.current,1, 'Difficulty')
-        sheet.write(row.current,2, 'Item-Total Correlation')
+        sheet.write(row.next(),0, 'Item', data_header_style)
+        sheet.write(row.current,1, 'Difficulty', data_header_style)
+        sheet.write(row.current,2, 'Item-Total Correlation', data_header_style)
 
         for level in sorted(self.item_level_stats.keys()):
-            sheet.write(row.next(),0, level)
-            sheet.write(row.current,1, self.item_level_stats[level]['difficulty'])
-            sheet.write(row.current,2, self.item_level_stats[level]['pearson'])
+            sheet.write(row.next(),0, level, d_style[row.current%2])
+            sheet.write(row.current,1, self.item_level_stats[level]['difficulty'], d_style[row.current%2])
+            sheet.write(row.current,2, self.item_level_stats[level]['pearson'], d_style[row.current%2])
             self.item_level_stats[level]
 
-        sheet.write(row.next(),0, 'Test Level  Statistics')
+        # blank row
+        row.next()
 
-        sheet.write(row.next(),0, 'Number of Items')
-        sheet.write(row.current,1,2)
+        sheet.write(row.next(),0, 'Test Level Statistics', data_header_style)
 
+        sheet.write(row.next(),0, 'Number of Items', data_style)
+        sheet.write(row.current,1,self.itemcount, data_style)
+
+        sheet.write(row.next(),0, 'Number of Examinees', data_style)
+        sheet.write(row.current,1,self.examineecount, data_style)
+
+        sheet.write(row.next(),0, 'Minimum Score', data_style)
+        sheet.write(row.current,1,self.minscore, data_style)
+
+        sheet.write(row.next(),0, 'Maximum Score', data_style)
+        sheet.write(row.current,1,self.maxscore, data_style)
+
+        sheet.write(row.next(),0, 'Mean Score', data_style)
+        sheet.write(row.current,1,self.meanscore, data_style)
+
+        sheet.write(row.next(),0, 'Standard Deviation', data_style)
+        sheet.write(row.current,1,self.deviation, data_style)
+
+        # blank row
+        row.next()
+        sheet.write(row.next(),0, 'Reliability Analysis', data_header_style)
+
+        sheet.write(row.next(),0, 'Method', data_style)
+        sheet.write(row.current,1, 'Estimate', data_style)
+        sheet.write(row.current,2, 'SEM', data_style)
+
+        sheet.write(row.next(),0, 'Cronbach\'s Alpha', data_style)
+        sheet.write(row.current,1, self.cronbach[0]['estimate'], data_style)
+        sheet.write(row.current,2, self.cronbach[0]['sem'], data_style)
         book.save('%s IAE.xls' % self.test_name)
 
     @classmethod
