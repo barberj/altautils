@@ -104,6 +104,22 @@ def fog1023():
     # return the new scoreconversionset
     return scs
 
+def fog1422():
+    # create a new Pass/Fail ALTA conversion set
+    # with a max value of 11
+    scs = tst.ScoreConversionSet()
+    scs.created_at = now
+    scs.updated_at = now
+    scs.name = 'AirTran'
+    scs.has_ilr = False
+    scs.ilr_only = False
+
+    for level in range(12):
+        converted_value = 'Did Not Pass (ALTA %s)' if level < 11 else 'Pass (ALTA %s)'
+        converted_value = converted_value % level
+        scs.conversions.append(create_conversion(converted_value,level))
+    # return the new scoreconversionset
+    return scs
 
 def fog996():
     # create a new Pass/Fail ILR conversion set
