@@ -294,7 +294,9 @@ class AnalysisWB(AnalysisDoc):
                         if t_choice == choice:
                             test_page.sheet.write(test_page.row,
                                 test_page['items'][item]['col'],
-                                test_page['items'][item]['choices'][choice] if not use_percentage else '%0.2f %%' % (test_page['items'][item]['choices'][choice] * 100 /  test_page['items'][item]['total']))
+                                0 if not test_page['items'][item]['total'] or not test_page['items'][item]['choices'][choice] else
+                                1 if test_page['items'][item]['choices'][choice] and not use_percentage else
+                                '%0.2f %%' % (test_page['items'][item]['choices'][choice] * 100 /  test_page['items'][item]['total']))
             test_page.next_row()
 
     def add_description(self, test_page):
