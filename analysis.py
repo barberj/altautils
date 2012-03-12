@@ -143,18 +143,6 @@ def get_test_ids():
     result_rows = query.all()
     return [row[0] for row in result_rows]
 
-class AnalysisDoc(object):
-
-    test_count = 0
-    version_count = 0
-    ct_count = 0
-
-    def __init__(self):
-        pass
-
-    def add_test(self):
-        pass
-
 class page(dict):
 
     def __init__(self, *args, **kwargs):
@@ -192,14 +180,7 @@ class page(dict):
         self['row'] += 1
         self['col'] = 0
 
-class AnalysisWB(AnalysisDoc):
-
-    _book = None
-
-    name = ''
-
-    tboc = None
-    pages = {}
+class AnalysisWB(object):
 
     def __init__(self, name='analysis.xls', raw=True, binary=False):
         """
@@ -210,6 +191,8 @@ class AnalysisWB(AnalysisDoc):
         self._book = Workbook()
         self.raw = raw
         self.binary = binary
+        self.pages = {}
+        self.ct_count = 0
 
         # create table of contents
         self.create_table_of_contents()
