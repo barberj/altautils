@@ -8,10 +8,12 @@ try:
     import erp.model as m
     import erp.model.testing as tst
     import erp.lib.altaUtils.unicode_csv as csv
+    from erp.model.lib.history import set_history
 except ImportError:
     import portal.model as m
     import portal.model.testing as tst
     import portal.lib.utilities.unicode_csv as csv
+    from portal.model.lib.history import set_history
 
 
 def change_test_html():
@@ -24,3 +26,30 @@ def change_test_html():
                             replace(u'<br>',u'\u000a').replace(u'<i>',u'').\
                             replace(u'</i>',u'')
 
+def update_previous(test_version_id):
+    """
+    fog1477
+
+    Some online tests don't have
+    the has_previous attribute set correctly.
+
+    Given a version update the has_previous.
+    """
+
+    # get our version
+    test_version = tst.TestVersion.get(test_version_id)
+
+    previous_section_timed = False
+    for section in test_version.sections:
+        # The very first section never has a previous,
+        # ignore archived sections,
+        # don't allow users to go back to sections that aren't
+        # timed inevitably stopping the clock
+        if section.position > 1 and not section.archived and \
+            previous_section_timed:
+            section.has_previous = True
+            set_history(section)
+            log.debug('adding previous flag to Section %s Position %s', section.id, section.position)
+
+        # update our timed flag for current section
+        previous_section_timed = section.timed
