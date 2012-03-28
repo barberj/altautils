@@ -46,7 +46,7 @@ def update_previous(test_version_id):
         # don't allow users to go back to sections that aren't
         # timed inevitably stopping the clock
         if section.position > 1 and not section.archived and \
-            previous_section_timed:
+            previous_section_timed and not section.has_previous:
             section.has_previous = True
             set_history(section)
             log.debug('adding previous flag to Section %s Position %s', section.id, section.position)
