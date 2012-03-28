@@ -2,7 +2,7 @@
 import logging as log
 log.root.level = log.DEBUG
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, distinct, asc
 
 try:
     import erp.model as m
@@ -53,3 +53,18 @@ def update_previous(test_version_id):
 
         # update our timed flag for current section
         previous_section_timed = section.timed
+
+def update_previous_all_versions():
+    """
+    Till we programatically fix the back button in the portal
+    I'm updating all versions to have previous based on the logic
+    in update_previous.
+    """
+
+    # get all the ids
+    version_ids = m.meta.Session.query(distinct(tst.TestVersion.id)).filter_by(archived=False).\
+        join('methods').filter_by(short_name='Online').\
+        join('test','type').filter_by(short_name='RC').all()
+
+    for version_id in version_ids:
+        update_previous(version_id)
